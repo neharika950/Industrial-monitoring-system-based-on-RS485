@@ -1,0 +1,115 @@
+Master
+#include <HardwareSerial.h>
+#include <DHT.h>
+
+#define DHTPIN 18  // DHT Sensor GPIO
+#define PIRPIN 19  // PIR Sensor GPIO
+#define DHTTYPE DHT11
+
+#define DE_RE 4    // MAX485 Control Pin
+HardwareSerial RS485Serial(2);  // UART2 (RX=16, TX=17)
+
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+    Serial.begin(115200);
+    RS485Serial.begin(9600, SERIAL_8N1, 16, 17);
+
+    pinMode(PIRPIN, INPUT);
+    pinMode(DE_RE, OUTPUT);
+    digitalWrite(DE_RE, HIGH);  // TX Mode
+
+    dht.begin();
+}
+
+void loop() {
+    bool motion = digitalRead(PIRPIN);
+    float temperature = dht.readTemperature();
+
+    Serial.print("Motion: ");
+    Serial.print(motion ? "Detected" : "Not Detected");
+    Serial.print(", Temperature: ");
+    Serial.println(temperature);
+
+    // Send data to Slave
+    digitalWrite(DE_RE, HIGH);  // TX Mode
+    delay(10);
+    RS485Serial.print(motion);
+    RS485Serial.print(",");
+    RS485Serial.print(temperature);
+    RS485Serial.print("\n");
+    delay(10);
+    digitalWrite(DE_RE, LOW);  // RX Mode
+
+    delay(5000);  // Check every 5 seconds
+}
+
+
+
+slave 
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <HardwareSerial.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+#define RELAY1 26  // Load 1 (ON if Motion Detected)
+#define RELAY2 25  // Load 2 (ON if Temp > 28°C)
+
+#define DE_RE 4
+HardwareSerial RS485Serial(2);  // UART2 (RX=16, TX=17)
+
+void setup() {
+    Serial.begin(115200);
+    RS485Serial.begin(9600, SERIAL_8N1, 16, 17);
+
+    pinMode(DE_RE, OUTPUT);
+    digitalWrite(DE_RE, LOW);  // RX Mode
+
+    pinMode(RELAY1, OUTPUT);
+    pinMode(RELAY2, OUTPUT);
+    digitalWrite(RELAY1, LOW);
+    digitalWrite(RELAY2, LOW);
+
+    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+        Serial.println("OLED init failed");
+        while (1);
+    }
+    display.clearDisplay();
+}
+
+void loop() {
+    if (RS485Serial.available()) {
+        String receivedData = RS485Serial.readStringUntil('\n');
+        receivedData.trim();
+
+        int commaIndex = receivedData.indexOf(",");
+        if (commaIndex > 0) {
+            int motion = receivedData.substring(0, commaIndex).toInt();
+            float temperature = receivedData.substring(commaIndex + 1).toFloat();
+
+            Serial.print("Motion: ");
+            Serial.print(motion ? "Detected" : "Not Detected");
+            Serial.print(", Temperature: ");
+            Serial.println(temperature);
+
+            // Display on OLED
+            display.clearDisplay();
+            display.setTextSize(1);
+            display.setTextColor(WHITE);
+            display.setCursor(0, 10);
+            display.print("Motion: ");
+            display.println(motion ? "Yes" : "No");
+            display.print("Temp: ");
+            display.print(temperature);
+            display.println(" C");
+            display.display();
+
+            digitalWrite(RELAY1, motion ? LOW : HIGH);    // ON if Motion Detected
+            digitalWrite(RELAY2, (temperature > 28) ? LOW : HIGH);  // ON if Temp > 28°C
+        }
+    }
+}

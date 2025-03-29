@@ -1,1 +1,1 @@
-[Uploading SOLAR-POWERED SMART INDUSTRY MANAGEMENT SYSTEM USING[1] cps (2).pptx…]()
+[Report_BATCH12_CPS.docx](https://github.com/user-attachments/files/19517671/Report_BATCH12_CPS.docx)
